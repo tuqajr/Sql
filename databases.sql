@@ -253,3 +253,20 @@ SELECT c.course_name
 FROM courses c
 LEFT JOIN enrollments e ON c.course_id = e.course_id
 WHERE e.student_id IS NULL;
+
+
+/* Advanced Queries */
+SELECT s.first_name, s.last_name
+FROM Students s
+JOIN Enrollments e ON s.student_id = e.student_id
+JOIN CourseAssignments ca ON e.course_id = ca.course_id
+WHERE ca.semester = 'Fall' AND ca.year = 2025
+GROUP BY s.student_id
+HAVING COUNT(e.course_id) > 3;
+
+SELECT s.first_name, s.last_name, e.course_id, e.grade
+FROM Students s
+JOIN Enrollments e ON s.student_id = e.student_id
+WHERE e.grade IS NULL OR e.grade = '';
+
+SELECT s.first_name, s.last
