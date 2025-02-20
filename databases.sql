@@ -6,10 +6,11 @@ CREATE TABLE Students (
     last_name VARCHAR(50) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     date_of_birth DATE NOT NULL,
-    gender ENUM('Male', 'Female', 'Other') NOT NULL,
+    gender ENUM('Male', 'Female') NOT NULL,
     major VARCHAR(100) DEFAULT NULL,
     enrollment_year YEAR NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 
 CREATE TABLE Courses (
     course_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -47,74 +48,94 @@ CREATE TABLE CourseAssignments (
     FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+/* Add Index */
+CREATE INDEX idx_course_code ON Courses(course_code);
 
-ALTER TABLE `courseassignments`
-  ADD PRIMARY KEY (`assignment_id`),
-  ADD KEY `instructor_id` (`instructor_id`),
-  ADD KEY `course_id` (`course_id`);
+/* Functions, Stored Procedures, Constraints, and Transactions */
 
-ALTER TABLE `courses`
+/* Function to calculate a student's age based on date_of_birth */
+CREATE FUNCTION CalculateAge(@date_of_birth DATE)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @age INT;
+    SET @age = DATEDIFF(YEAR, @date_of_birth, GETDATE()) -
+               CASE WHEN MONTH(@date_of_birth) > MONTH(GETDATE()) 
+                       OR (MONTH(@date_of_birth) = MONTH(GETDATE()) 
+                           AND DAY(@date_of_birth) > DAY(GETDATE())) 
+                    THEN 1 ELSE 0 END;
+    RETURN @age;
+END;
 
-CREATE TABLE `courseassignments` (
-  `assignment_id` int(11) NOT NULL AUTO_INCREMENT,
-  `instructor_id` int(11) DEFAULT NULL,
-  `course_id` int(11) DEFAULT NULL,
-  `semester` enum('Spring','Summer','Fall','Winter') NOT NULL,
-  `year` year(4) NOT NULL,
-  PRIMARY KEY (`assignment_id`),
-  KEY `instructor_id` (`instructor_id`),
-  KEY `course_id` (`course_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/* Stored procedure to enroll a student in a course */
+CREATE PROCEDURE EnrollStudent
+    @student_id INT,
+    @course_id INT
+AS
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM Enrollments WHERE student_id = @student_id AND course_id = @course_id)
+    BEGIN
+        INSERT INTO Enrollments (student_id, course_id)
+        VALUES (@student_id, @course_id);
+    END
+    ELSE
+    BEGIN
+        PRINT 'Student is already enrolled in this course.';
+    END
+END;
 
-CREATE TABLE `courses` (
-  `course_id` int(11) NOT NULL AUTO_INCREMENT,
-  `course_name` varchar(100) NOT NULL,
-  `course_code` varchar(20) NOT NULL UNIQUE,
-  `credits` int(11) NOT NULL CHECK (`credits` > 0),
-  `department` varchar(100) NOT NULL,
-  PRIMARY KEY (`course_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/* Add a constraint to ensure unique student emails */
+ALTER TABLE Students
+ADD CONSTRAINT unique_student_email UNIQUE (email);
 
-CREATE TABLE `enrollments` (
-  `enrollment_id` int(11) NOT NULL AUTO_INCREMENT,
-  `student_id` int(11) DEFAULT NULL,
-  `course_id` int(11) DEFAULT NULL,
-  `grade` char(2) DEFAULT NULL,
-  PRIMARY KEY (`enrollment_id`),
-  KEY `student_id` (`student_id`),
-  KEY `course_id` (`course_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/* Write a transaction to enroll a student if the course capacity isn't exceeded */
+CREATE PROCEDURE EnrollStudentWithCapacityCheck
+    @student_id INT,
+    @course_id INT
+AS
+BEGIN
+    BEGIN TRANSACTION;
 
-CREATE TABLE `instructors` (
-  `instructor_id` int(11) NOT NULL AUTO_INCREMENT,
-  `first_name` varchar(50) NOT NULL,
-  `last_name` varchar(50) NOT NULL,
-  `email` varchar(100) NOT NULL UNIQUE,
-  `hire_date` date NOT NULL,
-  `department` varchar(100) NOT NULL,
-  PRIMARY KEY (`instructor_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+    DECLARE @current_enrollment INT;
+    DECLARE @course_capacity INT;
+    DECLARE @already_enrolled BIT;
+    
+    SELECT @current_enrollment = COUNT(*)
+    FROM Enrollments
+    WHERE course_id = @course_id;
 
-CREATE TABLE `students` (
-  `student_id` int(11) NOT NULL AUTO_INCREMENT,
-  `first_name` varchar(50) NOT NULL,
-  `last_name` varchar(50) NOT NULL,
-  `email` varchar(100) NOT NULL UNIQUE,
-  `date_of_birth` date NOT NULL,
-  `gender` enum('Male','Female','Other') NOT NULL,
-  `major` varchar(100) DEFAULT NULL,
-  `enrollment_year` year(4) NOT NULL,
-  PRIMARY KEY (`student_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+    SELECT @course_capacity = capacity
+    FROM Courses
+    WHERE course_id = @course_id;
+    
+    SELECT @already_enrolled = CASE WHEN EXISTS (SELECT 1 FROM Enrollments WHERE student_id = @student_id AND course_id = @course_id) THEN 1 ELSE 0 END;
+    
+    IF @already_enrolled = 1
+    BEGIN
+        PRINT 'Student is already enrolled in this course.';
+        ROLLBACK TRANSACTION;
+    END
+    ELSE IF @current_enrollment < @course_capacity
+    BEGIN
+        INSERT INTO Enrollments (student_id, course_id)
+        VALUES (@student_id, @course_id);
 
+        COMMIT TRANSACTION;
+    END
+    ELSE
+    BEGIN
+        PRINT 'Course capacity has been exceeded.';
+        ROLLBACK TRANSACTION;
+    END
+END;
 
-ALTER TABLE `courseassignments`
-  ADD CONSTRAINT `courseassignments_ibfk_1` FOREIGN KEY (`instructor_id`) REFERENCES `instructors` (`instructor_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `courseassignments_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE;
+/* Use aggregate functions to show average grades by department */
+SELECT d.department_name, AVG(g.grade) AS average_grade
+FROM Grades g
+JOIN Courses c ON g.course_id = c.course_id
+JOIN Departments d ON c.department_id = d.department_id
+GROUP BY d.department_name;
 
-ALTER TABLE `enrollments`
-  ADD CONSTRAINT `enrollments_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`student_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `enrollments_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE;
 /* Insert Data */
 INSERT INTO Students (first_name, last_name, email, date_of_birth, gender, major, enrollment_year) VALUES
 ('John', 'Doe', 'john.doe@example.com', '2000-05-15', 'M', 'Computer Science', 2022),
@@ -142,7 +163,7 @@ INSERT INTO Courses (course_name, course_code, credits, department) VALUES
 ('Organic Chemistry', 'CHEM101', 3, 'Chemistry'),
 ('Biology Basics', 'BIO101', 4, 'Biology');
 
-INSERT INTO CourseAssignments (instructor_id, course_id, semester, year) VALUES
+INSERT INTO course_assignments (instructor_id, course_id, semester, year) VALUES
 (1, 1, 'Fall', 2024),
 (3, 2, 'Fall', 2024),
 (2, 3, 'Fall', 2024),
@@ -171,102 +192,71 @@ INSERT INTO Enrollments (student_id, course_id, grade) VALUES
 (10, 5, 'B'),
 (10, 3, 'A');
 
-
-
 ALTER TABLE `students`
   MODIFY `student_id` int(11) NOT NULL AUTO_INCREMENT;
 
+ALTER TABLE `course_assignments`
+  ADD CONSTRAINT
 
-ALTER TABLE `courseassignments`
-  ADD CONSTRAINT `courseassignments_ibfk_1` FOREIGN KEY (`instructor_id`) REFERENCES `instructors` (`instructor_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `courseassignments_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE;
+  /* op */
+CREATE INDEX idx_course_code ON Courses(course_code);
 
+/*  Create indexes on student_id and course_id in Enrollments*/
+ CREATE INDEX idx_student_id ON Enrollments(student_id);
+CREATE INDEX idx_course_id ON Enrollments(course_id);
 
-ALTER TABLE `enrollments`
-  ADD CONSTRAINT `enrollments_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`student_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `enrollments_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`course_id`) ON DELETE CASCADE;
-COMMIT;
-
-/* Basic Queries */
-SELECT * FROM students;
-
-SELECT COUNT(*) AS total_courses FROM courses;
-
-
-SELECT s.first_name, s.last_name 
-FROM students s
-JOIN enrollments e ON s.student_id = e.student_id
-WHERE e.course_id = 1;  
-
-SELECT email 
-FROM instructors
-WHERE department = 'Computer Science';  
-
-
-/* Intermediate Queries */
-SELECT c.course_name, COUNT(e.student_id) AS num_students
-FROM courses c
-LEFT JOIN enrollments e ON c.course_id = e.course_id
-GROUP BY c.course_id;
-
-SELECT s.first_name, s.last_name, c.course_name, e.grade
-FROM students s
-JOIN enrollments e ON s.student_id = e.student_id
-JOIN courses c ON e.course_id = c.course_id
-WHERE e.grade = 'A';
-
-SELECT c.course_name, i.first_name AS instructor_first_name, i.last_name AS instructor_last_name
-FROM courseassignments ca
-JOIN courses c ON ca.course_id = c.course_id
-JOIN instructors i ON ca.instructor_id = i.instructor_id
-WHERE ca.semester = 'Summer' AND ca.year = 2025;  
-
-SELECT c.course_name, AVG(
-    CASE 
-        WHEN e.grade = 'A' THEN 4.0
-        WHEN e.grade = 'B+' THEN 3.5
-        WHEN e.grade = 'B' THEN 3.0
-        WHEN e.grade = 'C+' THEN 2.5
-        WHEN e.grade = 'C' THEN 2.0
-        WHEN e.grade = 'D+' THEN 1.5
-        WHEN e.grade = 'D' THEN 1.0
-        WHEN e.grade = 'F' THEN 0.0
-        ELSE NULL 
-    END
-) AS average_grade
-FROM students s
-JOIN enrollments e ON s.student_id = e.student_id
-GROUP BY s.student_id
-ORDER BY average_grade DESC
-LIMIT 1;
-
-
-SELECT c.department, COUNT(c.course_id) AS num_courses
-FROM courses c
-JOIN courseassignments ca ON c.course_id = ca.course_id
-WHERE ca.year = 2025  
-ORDER BY num_courses DESC
-LIMIT 1;
-
-
-SELECT c.course_name
-FROM courses c
-LEFT JOIN enrollments e ON c.course_id = e.course_id
-WHERE e.student_id IS NULL;
-
-
-/* Advanced Queries */
-SELECT s.first_name, s.last_name
+EXPLAIN
+SELECT s.student_id, s.first_name, s.last_name, e.grade
 FROM Students s
 JOIN Enrollments e ON s.student_id = e.student_id
-JOIN CourseAssignments ca ON e.course_id = ca.course_id
-WHERE ca.semester = 'Fall' AND ca.year = 2025
-GROUP BY s.student_id
-HAVING COUNT(e.course_id) > 3;
+JOIN Courses c ON e.course_id = c.course_id
+WHERE c.course_code = 'CS101';
 
-SELECT s.first_name, s.last_name, e.course_id, e.grade
+
+/* an inner join to fetch students and the courses they are enrolled in.*/
+
+SELECT s.student_id, s.first_name, s.last_name, c.course_name, c.course_code
+FROM Students s
+INNER JOIN Enrollments e ON s.student_id = e.student_id
+INNER JOIN Courses c ON e.course_id = c.course_id;
+
+
+/* a left join to show instructors and courses they teach */
+SELECT i.instructor_id, i.first_name, i.last_name, c.course_name, c.course_code
+FROM Instructors i
+LEFT JOIN course_assignments ca ON i.instructor_id = ca.instructor_id
+LEFT JOIN Courses c ON ca.course_id = c.course_id;
+
+
+/* a query using union to list all students and instructors */
+SELECT first_name, last_name, 'Student' AS role
+FROM Students
+UNION
+SELECT first_name, last_name, 'Instructor' AS role
+FROM Instructors;
+
+
+
+
+/*  generate a report*/
+
+SELECT 
+    s.first_name AS student_first_name,
+    s.last_name AS student_last_name,
+    s.email AS student_email,
+    s.major AS student_major,
+    c.course_name AS course_name,
+    i.first_name AS instructor_first_name,
+    i.last_name AS instructor_last_name,
+    e.grade AS student_grade,
+    c.credits AS course_credits,
+    (SELECT SUM(c1.credits) 
+     FROM Enrollments e1 
+     JOIN Courses c1 ON e1.course_id = c1.course_id 
+     WHERE e1.student_id = s.student_id) AS total_credits
 FROM Students s
 JOIN Enrollments e ON s.student_id = e.student_id
-WHERE e.grade IS NULL OR e.grade = '';
-
-SELECT s.first_name, s.last
+JOIN Courses c ON e.course_id = c.course_id
+JOIN course_assignments ca ON c.course_id = ca.course_id
+JOIN Instructors i ON ca.instructor_id = i.instructor_id
+ORDER BY s.student_id, c.course_name;
