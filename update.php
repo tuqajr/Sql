@@ -1,14 +1,44 @@
+<?php
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $student_id = $_POST['student_id'];
+    $first_name = $_POST['first_name'];
+    $last_name = $_POST['last_name'];
+    $email = $_POST['email'];
+    $date_of_birth = $_POST['date_of_birth'];
+    $gender = $_POST['gender'];
+    $major = $_POST['major'];
+    $enrollment_year = $_POST['enrollment_year'];
+
+    try {
+        $conn = new PDO("mysql:host=localhost;dbname=tuqa-table", "root", "");
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        
+        $stmt = $conn->prepare("UPDATE students SET first_name = ?, last_name = ?, email = ?, date_of_birth = ?, gender = ?, major = ?, enrollment_year = ?, timestamp = NOW() WHERE student_id = ?");
+        $stmt->execute([$first_name, $last_name, $email, $date_of_birth, $gender, $major, $enrollment_year, $student_id]);
+        
+        echo "Student record updated successfully";
+    } catch (PDOException $e) {
+        echo "Error: " . $e->getMessage();
+    }
+} else {
+    $student_id = $_GET['id'];
+    $query = "SELECT * FROM students WHERE student_id = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->execute([$student_id]);
+    $student = $stmt->fetch(PDO::FETCH_ASSOC);
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student</title>
+    <title>Update Student</title>
 </head>
 <body>
-    <h2>Student Information</h2>
-    <form action="./tt_db.php" method="post">
-        <label for="student_id">Student ID:</label><br>
+    <h2>Update Student Information</h2>
+    <form action="update.php" method="post">
+    <label for="student_id">Student ID:</label><br>
         <input type="number" id="student_id" name="student_id" required><br><br>
         
         <label for="first_name">First Name:</label><br>
@@ -39,3 +69,7 @@
     </form>
 </body>
 </html>
+
+<?php
+}
+?>
