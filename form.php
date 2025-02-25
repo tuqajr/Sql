@@ -7,7 +7,7 @@
 </head>
 <body>
     <h2>Student Information</h2>
-    <form action="./tt_db.php" method="post">
+    <form action="db.php" method="post" enctype="multipart/form-data">
         <label for="student_id">Student ID:</label><br>
         <input type="number" id="student_id" name="student_id" required><br><br>
         
@@ -34,6 +34,9 @@
         
         <label for="enrollment_year">Enrollment Year:</label><br>
         <input type="number" id="enrollment_year" name="enrollment_year" min="2000" max="2100" required><br><br>
+        
+        <label for="image">Upload Image:</label><br>
+        <input type="file" id="image" name="image" accept="image/*" required><br><br>
         
         <input type="submit" value="Submit">
     </form>

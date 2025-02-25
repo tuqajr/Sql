@@ -1,27 +1,24 @@
 <?php
-$student_id = $_GET['id'];
-
-echo "<script>
-    if (confirm('Are you sure you want to delete this student?')) {
-        window.location.href = 'soft_delete.php?id={$student_id}';
-    } else {
-        window.location.href = 'index.php';
-    }
-</script>";
-?>
-
-<!-- soft_delete.php -->
-<?php
-$student_id = $_GET['id'];
-
 try {
     $conn = new PDO("mysql:host=localhost;dbname=tuqa-table", "root", "");
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    $stmt = $conn->prepare("UPDATE students SET deleted_at = NOW() WHERE student_id = ?");
-    $stmt->execute([$student_id]);
-    
-    echo "Student record soft deleted successfully";
+    if (isset($_GET['id'])) {
+        $student_id = $_GET['id'];
+
+        // Use a DELETE statement
+        $stmt = $conn->prepare("DELETE FROM students WHERE student_id = :student_id");
+
+        // Bind the named parameter
+        $stmt->bindParam(':student_id', $student_id);
+
+        // Execute the statement
+        $stmt->execute();
+
+        echo "Student deleted successfully.";
+        header("Location: index.php");
+        exit;
+    }
 } catch (PDOException $e) {
     echo "Error: " . $e->getMessage();
 }

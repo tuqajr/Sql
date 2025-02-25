@@ -1,4 +1,4 @@
-/* Database Design */
+/* Database Deoign */
 
 CREATE TABLE Students (
     student_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -9,6 +9,7 @@ CREATE TABLE Students (
     gender ENUM('Male', 'Female') NOT NULL,
     major VARCHAR(100) DEFAULT NULL,
     enrollment_year YEAR NOT NULL
+    image_path VARCHAR(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
@@ -260,3 +261,5 @@ JOIN Courses c ON e.course_id = c.course_id
 JOIN course_assignments ca ON c.course_id = ca.course_id
 JOIN Instructors i ON ca.instructor_id = i.instructor_id
 ORDER BY s.student_id, c.course_name;
+
+ALTER TABLE students ADD image_path VARCHAR(255) NOT NULL;
